@@ -13,13 +13,16 @@ st.set_page_config(page_title="AI Resume Builder & Analyzer", page_icon="💼", 
 st.title("💼 AI Resume Builder & Analyzer")
 st.write("Enhance, rewrite, and analyze your resume using RapidAPI's AI Resume Builder API.")
 
-tab1, tab2, tab3 = st.tabs(["📄 Upload or Paste Resume", "🤖 AI Resume Rewriter", "📊 Insights"])
+if "resume_text" not in st.session_state:
+    st.session_state["resume_text"] = ""
 
-resume_text = ""
+tab1, tab2, tab3 = st.tabs(["📄 Upload or Paste Resume", "🤖 AI Resume Rewriter", "📊 Insights"])
 
 with tab1:
     st.subheader("Upload or Paste Your Resume")
     uploaded_file = st.file_uploader("Upload PDF or TXT", type=["pdf", "txt"])
+
+    resume_text = ""
     if uploaded_file:
         if uploaded_file.type == "application/pdf":
             if PyPDF2:
@@ -29,12 +32,24 @@ with tab1:
                 st.error("PyPDF2 is not installed. Please install it to use PDF upload feature.")
         else:
             resume_text = uploaded_file.read().decode("utf-8")
-    resume_text = st.text_area("Or paste your resume here:", resume_text, height=300)
+
+    resume_input = st.text_area("Or paste your resume here:", resume_text, height=300, key="resume_input")
+
+    if st.button("Save Resume", type="primary"):
+        if resume_input.strip():
+            st.session_state["resume_text"] = resume_input
+            st.success("✅ Resume saved! Now go to the AI Resume Rewriter tab.")
+        else:
+            st.warning("Please enter or upload your resume first.")
 
 with tab2:
     st.subheader("Rewrite Resume with AI ✨")
-    if st.button("Rewrite Resume"):
-        if not resume_text.strip():
+
+    if st.session_state["resume_text"]:
+        st.info(f"📄 Resume loaded: {len(st.session_state['resume_text'].split())} words")
+
+    if st.button("Rewrite Resume", type="primary"):
+        if not st.session_state["resume_text"].strip():
             st.warning("Please upload or paste your resume first.")
         else:
             try:
@@ -46,16 +61,16 @@ with tab2:
                         "Content-Type": "application/json",
                         "x-usiapps-req": "true"
                     }
-                    payload = {"resumeText": resume_text}
+                    payload = {"resumeText": st.session_state["resume_text"]}
                     response = requests.post(url, headers=headers, data=json.dumps(payload))
 
                     if response.status_code == 200:
                         data = response.json()
                         rewritten_resume = data.get("text", json.dumps(data, indent=2))
                         st.success("✅ Resume rewritten successfully!")
-                        st.text_area("AI-Rewritten Resume:", rewritten_resume, height=400)
+                        st.text_area("AI-Rewritten Resume:", rewritten_resume, height=400, key="rewritten_display")
                         st.download_button("📥 Download Rewritten Resume", rewritten_resume, file_name="rewritten_resume.txt")
-                        st.session_state["original_resume"] = resume_text
+                        st.session_state["original_resume"] = st.session_state["resume_text"]
                         st.session_state["rewritten_resume"] = rewritten_resume
                     else:
                         st.error(f"API Error {response.status_code}: {response.text}")
