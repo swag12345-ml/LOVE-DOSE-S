@@ -1,156 +1,84 @@
 import streamlit as st
 import requests
 import json
+import io
 
-st.set_page_config(page_title="Spotify Music Player", page_icon="🎧", layout="wide")
+try:
+    import PyPDF2
+except ImportError:
+    PyPDF2 = None
 
-st.title("🎧 Spotify RapidAPI Music Player")
+st.set_page_config(page_title="AI Resume Builder & Analyzer", page_icon="💼", layout="centered")
 
-API_KEY = "f3dd6114b8mshe6ff78ae32a91f9p124901jsn4de9f1698693"
-API_HOST = "spotify23.p.rapidapi.com"
+st.title("💼 AI Resume Builder & Analyzer")
+st.write("Enhance, rewrite, and analyze your resume using RapidAPI's AI Resume Builder API.")
 
-headers = {
-    'x-rapidapi-key': API_KEY,
-    'x-rapidapi-host': API_HOST
-}
+tab1, tab2, tab3 = st.tabs(["📄 Upload or Paste Resume", "🤖 AI Resume Rewriter", "📊 Insights"])
 
-def search_tracks(query):
-    url = f"https://{API_HOST}/search/"
-    params = {
-        'q': query,
-        'type': 'tracks',
-        'limit': 5
-    }
+resume_text = ""
 
-    try:
-        response = requests.get(url, headers=headers, params=params)
-        response.raise_for_status()
-        return response.json()
-    except Exception as e:
-        st.error(f"Error searching tracks: {str(e)}")
-        return None
-
-def get_lyrics(track_id):
-    url = f"https://{API_HOST}/track_lyrics/"
-    params = {'id': track_id}
-
-    try:
-        response = requests.get(url, headers=headers, params=params)
-        response.raise_for_status()
-        return response.json()
-    except Exception as e:
-        return None
-
-st.markdown("### Search for a song or artist")
-query = st.text_input("Enter song or artist name:", placeholder="e.g., Billie Eilish")
-
-if st.button("🔍 Search", type="primary"):
-    if query:
-        with st.spinner("Searching..."):
-            results = search_tracks(query)
-
-            if results and 'tracks' in results and 'items' in results['tracks']:
-                tracks = results['tracks']['items']
-
-                if tracks:
-                    st.success(f"Found {len(tracks)} tracks")
-
-                    for idx, track in enumerate(tracks):
-                        if not track or not isinstance(track, dict):
-                            continue
-
-                        track_name = track.get('name', 'Unknown Track')
-                        track_id = track.get('id', '')
-
-                        artists = track.get('artists', [])
-                        artist_names = ', '.join([artist.get('name', 'Unknown Artist') for artist in artists if artist.get('name')])
-                        if not artist_names:
-                            artist_names = 'Unknown Artist'
-
-                        with st.expander(f"🎵 {track_name} - {artist_names}", expanded=(idx == 0)):
-                            col1, col2 = st.columns([1, 2])
-
-                            with col1:
-                                album = track.get('album', {})
-                                images = album.get('images', []) if album else []
-
-                                if images and len(images) > 0:
-                                    st.image(images[0].get('url', ''), width=250)
-                                else:
-                                    st.info("No album cover available")
-
-                            with col2:
-                                st.markdown(f"**Song:** {track_name}")
-                                st.markdown(f"**Artist(s):** {artist_names}")
-
-                                album_name = album.get('name', 'Unknown Album') if album else 'Unknown Album'
-                                st.markdown(f"**Album:** {album_name}")
-
-                                release_date = album.get('release_date', 'N/A') if album else 'N/A'
-                                st.markdown(f"**Release Date:** {release_date}")
-
-                                preview_url = track.get('preview_url')
-                                if preview_url:
-                                    st.audio(preview_url)
-                                else:
-                                    st.warning("⚠️ Preview audio not available for this track")
-
-                            st.markdown("---")
-                            st.markdown("### 📝 Lyrics")
-
-                            if track_id:
-                                with st.spinner("Fetching lyrics..."):
-                                    lyrics_data = get_lyrics(track_id)
-
-                                    if lyrics_data and 'lyrics' in lyrics_data and 'lines' in lyrics_data['lyrics']:
-                                        lyrics_lines = lyrics_data['lyrics']['lines']
-
-                                        if lyrics_lines:
-                                            st.info("Note: Lyrics display is limited to avoid copyright issues. Please visit Spotify or official sources for complete lyrics.")
-
-                                            lyrics_container = st.container()
-                                            with lyrics_container:
-                                                st.markdown(
-                                                    """
-                                                    <style>
-                                                    .lyrics-box {
-                                                        background-color: #f0f2f6;
-                                                        padding: 20px;
-                                                        border-radius: 10px;
-                                                        max-height: 300px;
-                                                        overflow-y: auto;
-                                                        font-family: 'Courier New', monospace;
-                                                        line-height: 1.6;
-                                                    }
-                                                    </style>
-                                                    """,
-                                                    unsafe_allow_html=True
-                                                )
-
-                                                preview_text = f"Lyrics available ({len(lyrics_lines)} lines)"
-                                                st.markdown(f'<div class="lyrics-box">{preview_text}<br><br>🎤 Full lyrics available on Spotify</div>', unsafe_allow_html=True)
-                                        else:
-                                            st.warning("No lyrics available for this track")
-                                    else:
-                                        st.warning("Lyrics not found for this track")
-                            else:
-                                st.warning("Track ID not available")
-
-                            st.markdown("---")
-                else:
-                    st.warning("No tracks found. Try a different search term.")
+with tab1:
+    st.subheader("Upload or Paste Your Resume")
+    uploaded_file = st.file_uploader("Upload PDF or TXT", type=["pdf", "txt"])
+    if uploaded_file:
+        if uploaded_file.type == "application/pdf":
+            if PyPDF2:
+                reader = PyPDF2.PdfReader(uploaded_file)
+                resume_text = "\n".join([page.extract_text() for page in reader.pages])
             else:
-                st.error("Unable to retrieve search results. Please try again.")
-    else:
-        st.warning("Please enter a search query")
+                st.error("PyPDF2 is not installed. Please install it to use PDF upload feature.")
+        else:
+            resume_text = uploaded_file.read().decode("utf-8")
+    resume_text = st.text_area("Or paste your resume here:", resume_text, height=300)
 
-st.markdown("---")
-st.markdown(
-    """
-    <div style='text-align: center; color: #666; padding: 20px;'>
-        <p>Powered by Spotify API via RapidAPI</p>
-        <p style='font-size: 0.8em;'>Search for your favorite songs and artists</p>
-    </div>
-    """,
-    unsafe_allow_html=True
-)
+with tab2:
+    st.subheader("Rewrite Resume with AI ✨")
+    if st.button("Rewrite Resume"):
+        if not resume_text.strip():
+            st.warning("Please upload or paste your resume first.")
+        else:
+            try:
+                with st.spinner("Rewriting your resume with AI..."):
+                    url = "https://ai-resume-builder-cv-checker-resume-rewriter-api.p.rapidapi.com/generateResume?noqueue=1&language=en"
+                    headers = {
+                        "x-rapidapi-key": "6d5a1ea9cdmsh0b7c5c815ef5aa4p14fe2djsnfa9b5a5d0f6d",
+                        "x-rapidapi-host": "ai-resume-builder-cv-checker-resume-rewriter-api.p.rapidapi.com",
+                        "Content-Type": "application/json",
+                        "x-usiapps-req": "true"
+                    }
+                    payload = {"resumeText": resume_text}
+                    response = requests.post(url, headers=headers, data=json.dumps(payload))
+
+                    if response.status_code == 200:
+                        data = response.json()
+                        rewritten_resume = data.get("text", json.dumps(data, indent=2))
+                        st.success("✅ Resume rewritten successfully!")
+                        st.text_area("AI-Rewritten Resume:", rewritten_resume, height=400)
+                        st.download_button("📥 Download Rewritten Resume", rewritten_resume, file_name="rewritten_resume.txt")
+                        st.session_state["original_resume"] = resume_text
+                        st.session_state["rewritten_resume"] = rewritten_resume
+                    else:
+                        st.error(f"API Error {response.status_code}: {response.text}")
+            except Exception as e:
+                st.error(f"Error: {e}")
+
+with tab3:
+    st.subheader("📊 Resume Insights")
+    if "original_resume" in st.session_state and "rewritten_resume" in st.session_state:
+        orig = st.session_state["original_resume"]
+        rew = st.session_state["rewritten_resume"]
+        orig_len = len(orig.split())
+        rew_len = len(rew.split())
+        orig_chars = len(orig)
+        rew_chars = len(rew)
+
+        col1, col2 = st.columns(2)
+        with col1:
+            st.metric("Original Resume", f"{orig_len} words", f"{orig_chars} chars")
+        with col2:
+            st.metric("Rewritten Resume", f"{rew_len} words", f"{rew_chars} chars")
+
+        improvement = ((rew_len - orig_len) / orig_len) * 100 if orig_len > 0 else 0
+        st.write(f"**Content Expansion:** {improvement:.2f}%")
+    else:
+        st.info("Please rewrite a resume first to view insights.")
